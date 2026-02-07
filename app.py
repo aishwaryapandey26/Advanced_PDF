@@ -234,63 +234,54 @@ elif selected == "PDF Tools":
             )
 
 
-        # ---------------- CAMERA UPLOAD ----------------
+# ---------------- CAMERA UPLOAD ----------------
 elif selected == "Camera Upload":
-   
-
     st.header("📸 Camera / Mobile Upload to PDF")
 
-    # Generate a QR code that links to this Streamlit app
-    app_url = st.secrets.get("APP_URL", "https://advancedpdf-yuu5mabee3vpbmjlpmy2no.streamlit.app/")
-    qr = qrcode.QRCode(box_size=10, border=2)
-    qr.add_data(app_url)
-    qr.make(fit=True)
-    img_qr = qr.make_image(fill_color="black", back_color="white")
+    st.write("Use your phone to take photos or select images from your gallery. Uploaded images will appear below in real-time.")
 
-    # Convert PilImage to BytesIO for Streamlit
-    buf = BytesIO()
-    img_qr.save(buf, format="PNG")
-    buf.seek(0)
-
-    # Display QR code
-    st.image(buf, caption="Scan to open app on phone")
-
-    # Allow image upload from phone
+    # Mobile-friendly file uploader
     uploaded_images = st.file_uploader(
-        "Take a photo or select images from phone",
+        "Take a photo or select images from your phone",
         type=["png", "jpg", "jpeg"],
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="camera_upload"
     )
 
     if uploaded_images:
         st.success(f"{len(uploaded_images)} image(s) uploaded!")
-        images = []
 
-        # Show uploaded images in real-time
+        images = []
+        cols = st.columns(len(uploaded_images))
+
+        # Display uploaded images as thumbnails in real-time
         for i, img_file in enumerate(uploaded_images):
             img = Image.open(img_file)
-            st.image(img, caption=f"Image {i+1}", width=250)
             images.append(img)
+            with cols[i % len(cols)]:
+                st.image(img, caption=f"Image {i+1}", width=200)
 
         # Merge images into PDF
-        if st.button("Merge Images to PDF"):
+        if st.button("Merge Images into PDF"):
             pdf_bytes = BytesIO()
             images[0].save(pdf_bytes, format="PDF", save_all=True, append_images=images[1:])
             pdf_bytes.seek(0)
+
             filename = f"images_merged_{int(time.time())}.pdf"
             save_bytes_to_folder(pdf_bytes.getvalue(), SAVED_DIR, filename)
             record_history(filename, "images_merge")
 
+            st.success("✅ PDF created successfully!")
             st.download_button(
-                "⬇️ Download PDF",
+                "⬇️ Download Merged PDF",
                 pdf_bytes,
                 file_name=filename
             )
 
-        # Optional: Reorder images (simple numeric order)
+        # Optional: allow reordering images before merging
         st.subheader("Reorder Images")
         order = st.multiselect(
-            "Select order (1-based index)",
+            "Select order (1 = first image, etc.)",
             options=list(range(1, len(images)+1)),
             default=list(range(1, len(images)+1))
         )
