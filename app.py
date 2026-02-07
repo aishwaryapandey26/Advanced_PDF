@@ -20,20 +20,7 @@ from io import BytesIO
 
 st.header("📸 Camera / Mobile Upload to PDF")
 
-# Generate a QR code that links to this Streamlit app
-app_url = st.secrets.get("APP_URL", "https://your-app-url.com")  # replace with deployed app URL
-qr = qrcode.QRCode(box_size=10, border=2)
-qr.add_data(app_url)
-qr.make(fit=True)
-img_qr = qr.make_image(fill_color="black", back_color="white")
 
-# Convert PilImage to BytesIO
-buf = BytesIO()
-img_qr.save(buf, format="PNG")
-buf.seek(0)
-
-# Display QR code
-st.image(buf, caption="Scan to open app on phone")
 
 
 # ---------------- CONFIG ----------------
@@ -254,7 +241,7 @@ elif selected == "Camera Upload":
     st.header("📸 Camera / Mobile Upload to PDF")
 
     # Generate a QR code that links to this Streamlit app
-    app_url = st.secrets.get("APP_URL", "https://your-app-url.com")  # replace with deployed app URL
+    app_url = st.secrets.get("APP_URL", "https://advancedpdf-yuu5mabee3vpbmjlpmy2no.streamlit.app/")
     qr = qrcode.QRCode(box_size=10, border=2)
     qr.add_data(app_url)
     qr.make(fit=True)
