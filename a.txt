@@ -1,0 +1,373 @@
+import streamlit as st
+from streamlit_option_menu import option_menu
+from streamlit_lottie import st_lottie
+from PyPDF2 import PdfReader, PdfWriter
+import requests, json, os, datetime, time
+from io import BytesIO
+import uuid
+import fitz  # PyMuPDF
+from PyPDF2 import PdfWriter
+
+ai_reply = ""
+
+# ---------------------- CONFIGURATION ----------------------
+SERVER_URL = "http://127.0.0.1:8000"
+SAVED_DIR = "saved_pdfs"
+HISTORY_FILE = os.path.join(SAVED_DIR, "history.json")
+os.makedirs(SAVED_DIR, exist_ok=True)
+if not os.path.exists(HISTORY_FILE):
+    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
+        json.dump([], f)
+
+# ---------------------- HELPERS ----------------------
+def save_bytes_to_folder(bytes_data: bytes, folder: str, filename: str):
+    os.makedirs(folder, exist_ok=True)
+    path = os.path.join(folder, filename)
+    with open(path, "wb") as wf:
+        wf.write(bytes_data)
+    return path
+
+def record_history(filename: str, action: str):
+    entry = {"filename": filename, "action": action, "timestamp": datetime.datetime.now().isoformat()}
+    with open(HISTORY_FILE, "r+", encoding="utf-8") as f:
+        data = json.load(f)
+        data.insert(0, entry)
+        f.seek(0); f.truncate()
+        json.dump(data, f, indent=2)
+
+def get_history():
+    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def load_lottie_url(url: str):
+    try:
+        r = requests.get(url, timeout=6)
+        if r.status_code == 200:
+            return r.json()
+    except:
+        return None
+    return None
+
+# ---------------------- PAGE SETUP ----------------------
+st.set_page_config(page_title="PDF Utility Tool", page_icon="📄", layout="wide")
+with st.sidebar:
+    selected = option_menu(
+        menu_title=None,
+        options=["Home", "Merge PDF", "Split PDF", "Saved Files", "AI Assistant", "About"],
+        icons=["house", "file-earmark-arrow-down", "scissors", "clock-history", "robot", "info-circle"],
+        default_index=0
+    )
+
+# ---------------------- LOTTIE ANIMATIONS ----------------------
+LOTTIE_MAP = {
+    "Home": "https://assets2.lottiefiles.com/packages/lf20_jcikwtux.json",
+    "Merge PDF": "https://assets9.lottiefiles.com/packages/lf20_yr6zz3wv.json",
+    "Split PDF": "https://assets9.lottiefiles.com/packages/lf20_x62chJ.json",
+    "Saved Files": "https://assets2.lottiefiles.com/packages/lf20_0yfsb3a1.json",
+    "AI Assistant": "https://assets2.lottiefiles.com/packages/lf20_iwmd6pyr.json",
+    "About": "https://assets2.lottiefiles.com/packages/lf20_touohxv0.json"
+}
+lottie_animation = load_lottie_url(LOTTIE_MAP.get(selected))
+if lottie_animation:
+    st.markdown('<div class="lottie-bg">', unsafe_allow_html=True)
+    st_lottie(lottie_animation, height=400, loop=True, quality="low")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------------- HOME ----------------------
+if selected == "Home":
+    st.title("📄 PDF Utility Dashboard")
+    st.write("Merge, split and manage PDFs using a clean UI.")
+
+# ---------------------- MERGE PDF ----------------------
+elif selected == "Merge PDF":
+    st.header("📎 Merge PDF Files")
+    uploaded_files = st.file_uploader("Upload PDF files", type="pdf", accept_multiple_files=True)
+    if uploaded_files:
+        st.info(f"{len(uploaded_files)} file(s) ready to merge.")
+
+    if st.button("Merge & Save"):
+        if not uploaded_files or len(uploaded_files) < 2:
+            st.error("Upload at least 2 PDFs.")
+        else:
+            progress = st.progress(0)
+            for i in range(100):
+                time.sleep(0.01)
+                progress.progress(i+1)
+
+            writer = PdfWriter()
+            for f in uploaded_files:
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    writer.add_page(page)
+            filename = f"merged_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+            save_bytes_to_folder(BytesIO().write(writer.write(BytesIO())), SAVED_DIR, filename)
+            record_history(filename, "merge")
+            st.success("Merge complete!")
+            st.download_button("Download merged PDF", data=BytesIO().write(writer.write(BytesIO())), file_name=filename)
+
+# ---------------------- SPLIT PDF ----------------------
+elif selected == "Split PDF":
+    st.header("✂️ Split PDF")
+    uploaded_file = st.file_uploader("Upload PDF", type="pdf")
+    if uploaded_file:
+        reader = PdfReader(uploaded_file)
+        total_pages = len(reader.pages)
+        st.info(f"Total pages: {total_pages}")
+
+        start_page = st.number_input("Start page", min_value=1, max_value=total_pages, value=1)
+        end_page = st.number_input("End page", min_value=1, max_value=total_pages, value=total_pages)
+
+        if st.button("Split & Save"):
+            if start_page > end_page:
+                st.error("Start page cannot be greater than end page.")
+            else:
+                progress = st.progress(0)
+                for i in range(100):
+                    time.sleep(0.01)
+                    progress.progress(i+1)
+
+                writer = PdfWriter()
+                for i in range(start_page - 1, end_page):
+                    writer.add_page(reader.pages[i])
+
+                filename = f"split_pages_{start_page}_to_{end_page}_{uploaded_file.name}"
+                pdf_bytes = BytesIO()
+                writer.write(pdf_bytes)
+                pdf_bytes.seek(0)
+                save_bytes_to_folder(pdf_bytes.getvalue(), SAVED_DIR, filename)
+                record_history(filename, "split")
+                st.success(f"Split complete: {filename}")
+                st.download_button("Download split PDF", data=pdf_bytes, file_name=filename)
+
+# ---------------------- SAVED FILES ----------------------
+elif selected == "Saved Files":
+    import uuid
+    st.header("📚 Saved PDF History")
+    history = get_history()
+
+    if not history:
+        st.info("No saved files yet.")
+    else:
+        for entry in history:
+            file_path = os.path.join(SAVED_DIR, entry["filename"])
+            col1, col2, col3, col4 = st.columns([4, 3, 1, 1])
+
+            with col1:
+                st.write(f"📄 **{entry['filename']}**")
+            with col2:
+                st.write(f"🕒 *{entry['timestamp']}*")
+
+            with col3:
+                if os.path.exists(file_path):
+                    with open(file_path, "rb") as f:
+                        st.download_button(
+                            "Download",
+                            data=f.read(),
+                            file_name=entry["filename"],
+                            key=f"download_{uuid.uuid4()}"   # 🔥 ALWAYS UNIQUE
+                        )
+
+            with col4:
+                if st.button("🗑️ Delete", key=f"delete_{uuid.uuid4()}"):
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+
+                    updated = [x for x in history if x["filename"] != entry["filename"]]
+                    with open(HISTORY_FILE, "w") as hf:
+                        json.dump(updated, hf, indent=2)
+                    st.success(f"Deleted {entry['filename']}")
+                    st.experimental_rerun()
+
+# ---------------------- AI ASSISTANT ----------------------
+elif selected == "AI Assistant":
+    st.header("🤖 AI PDF Assistant")
+    st.write("Upload PDFs and ask for merge/split suggestions.")
+
+    api_key = st.text_input("Enter OpenAI API Key", type="password")
+    if "chat_history" not in st.session_state: st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        st.chat_message(msg["role"]).markdown(msg["content"])
+
+    uploaded_files = st.file_uploader("Upload PDF(s) for AI analysis", type="pdf", accept_multiple_files=True)
+    user_input = st.chat_input("Ask something…")
+
+    if user_input:
+        if not api_key:
+            st.error("Enter your OpenAI API key first.")
+        else:
+            import openai
+            openai.api_key = api_key
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            st.chat_message("user").markdown(user_input)
+
+            # Extract PDF text
+            pdf_text = ""
+            if uploaded_files:
+                for f in uploaded_files:
+                    try:
+                        reader = PdfReader(f)
+                        for page in reader.pages: pdf_text += page.extract_text() + "\n"
+                    except: pdf_text += "(Text could not be extracted.)"
+
+            prompt = f"User query: {user_input}\nPDF Content: {pdf_text[:6000]}\nSuggest merge/split with filenames and page ranges."
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}]
+            )
+            ai_reply = response.choices[0].message.content
+            st.session_state.chat_history.append({"role": "assistant", "content": ai_reply})
+            st.chat_message("assistant").markdown(ai_reply)
+
+# --------------------- Convert AI Reply to PDF ---------------------
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+
+if ai_reply:
+    if st.button("Download AI Response as PDF"):
+        pdf_buffer = BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=letter)
+
+        text_obj = c.beginText(40, 750)
+        text_obj.setFont("Helvetica", 11)
+
+        # Split long text into lines
+        for line in ai_reply.split("\n"):
+            text_obj.textLine(line)
+
+        c.drawText(text_obj)
+        c.showPage()
+        c.save()
+
+        pdf_buffer.seek(0)
+
+        st.download_button(
+            label="💾 Click to Download PDF",
+            data=pdf_buffer,
+            file_name="AI_Response.pdf",
+            mime="application/pdf",
+        )
+def detect_page_type(page):
+    """Detects if a page contains signatures, images, or normal text."""
+    text = page.get_text().lower()
+
+    # 1. Signature detection
+    signature_keywords = ["signature", "sign", "signed", "authorized", "approved"]
+    if any(word in text for word in signature_keywords):
+        return "signature"
+
+    # 2. Image detection
+    if len(page.get_images(full=True)) > 0:
+        return "image"
+
+    # 3. Text-only page
+    return "text"
+
+
+def sort_pdf_pages(input_pdf_path, output_pdf_path):
+    doc = fitz.open(input_pdf_path)
+
+    signature_pages = []
+    image_pages = []
+    text_pages = []
+
+    # Analyze pages
+    for i in range(len(doc)):
+        page = doc[i]
+        page_type = detect_page_type(page)
+
+        if page_type == "signature":
+            signature_pages.append(i)
+        elif page_type == "image":
+            image_pages.append(i)
+        else:
+            text_pages.append(i)
+
+    # FINAL SORT ORDER
+    sorted_pages = signature_pages + image_pages + text_pages
+
+    # Write new PDF
+    writer = PdfWriter()
+    for pg in sorted_pages:
+        writer.add_page(PdfReader(input_pdf_path).pages[pg])
+
+    with open(output_pdf_path, "wb") as f:
+        writer.write(f)
+
+    return {
+        "signature_pages": signature_pages,
+        "image_pages": image_pages,
+        "text_pages": text_pages,
+        "sorted_order": sorted_pages
+    }
+import fitz  # PyMuPDF
+
+def classify_pdf_pages(pdf_file):
+    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+    results = []
+
+    for page_num, page in enumerate(doc):
+        images = page.get_images(full=True)
+        text = page.get_text()
+
+        has_image = len(images) > 0
+        has_signature = False
+
+        # Very simple signature heuristics
+        signature_keywords = ["signature", "signed", "authorised", "approved"]
+        for word in signature_keywords:
+            if word.lower() in text.lower():
+                has_signature = True
+
+        results.append({
+            "page": page_num + 1,
+            "has_image": has_image,
+            "has_signature": has_signature
+        })
+
+    return results
+def sort_pages_by_content(pdf_file):
+    pdf_file.seek(0)
+    classifications = classify_pdf_pages(pdf_file)
+
+    doc = fitz.open(stream=pdf_file.read(), filetype="pdf")
+
+    signature_pages = []
+    image_pages = []
+    normal_pages = []
+
+    for info in classifications:
+        page_number = info["page"] - 1
+
+        if info["has_signature"]:
+            signature_pages.append(page_number)
+        elif info["has_image"]:
+            image_pages.append(page_number)
+        else:
+            normal_pages.append(page_number)
+
+    sorted_order = signature_pages + image_pages + normal_pages
+
+    # Build new PDF
+    new_pdf = fitz.open()
+    for num in sorted_order:
+        new_pdf.insert_pdf(doc, from_page=num, to_page=num)
+
+    output_bytes = new_pdf.tobytes()
+    new_pdf.close()
+
+    return output_bytes, classifications
+uploaded = st.file_uploader("Upload PDF", type="pdf")
+
+if uploaded:
+    if st.button("Sort PDF pages (AI-based)"):
+        sorted_pdf, info = sort_pages_by_content(uploaded)
+
+        st.write("Page Classification:")
+        st.json(info)
+
+        st.download_button(
+            "Download Sorted PDF",
+            sorted_pdf,
+            file_name="sorted_pages.pdf"
+        )
