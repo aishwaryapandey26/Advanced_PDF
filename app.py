@@ -233,61 +233,70 @@ elif selected == "PDF Tools":
                 file_name="reordered_pages.pdf"
             )
 
-
 # ---------------- CAMERA UPLOAD ----------------
+    from streamlit_autorefresh import st_autorefresh
+
+    # Auto-refresh every 3 seconds
+    count = st_autorefresh(interval=3000, key="upload_refresh")
+
 elif selected == "Camera Upload":
-    st.header("📸 Camera / Mobile Upload to PDF")
+    st.header("📸 Camera / Mobile Upload to PDF via QR Code")
 
-    st.write("Use your phone to take photos or select images from your gallery. Uploaded images will appear below in real-time.")
+    st.write("Scan this QR code with your phone. On your phone, you can take photos or select from gallery. Images will appear here on your laptop in real-time.")
 
-    # Mobile-friendly file uploader
-    uploaded_images = st.file_uploader(
-        "Take a photo or select images from your phone",
-        type=["png", "jpg", "jpeg"],
-        accept_multiple_files=True,
-        key="camera_upload"
-    )
+    # Generate a QR code linking to a mobile upload page
+    # You need a separate Streamlit page or endpoint for mobile upload
+    # For now, let's assume we use the same app with a mobile mode
+    app_url = st.secrets.get("APP_URL", "https://advancedpdf-yuu5mabee3vpbmjlpmy2no.streamlit.app/mobile_upload")
+    
+    qr = qrcode.QRCode(box_size=8, border=2)
+    qr.add_data(app_url)
+    qr.make(fit=True)
+    img_qr = qr.make_image(fill_color="black", back_color="white")
 
-    if uploaded_images:
-        st.success(f"{len(uploaded_images)} image(s) uploaded!")
+    # Display QR code on laptop
+    buf = BytesIO()
+    img_qr.save(buf, format="PNG")
+    buf.seek(0)
+    st.image(buf, caption="Scan to upload from your phone", width=250)
 
+    # ------------------ Real-time upload display ------------------
+    st.write("Uploaded images will appear below:")
+
+    # Polling for uploaded images (simulate real-time)
+    # We'll use a folder "mobile_uploads" where mobile clients save images
+    UPLOAD_DIR = "mobile_uploads"
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+    uploaded_files = []
+    for f in os.listdir(UPLOAD_DIR):
+        path = os.path.join(UPLOAD_DIR, f)
+        if os.path.isfile(path):
+            uploaded_files.append(path)
+
+    if uploaded_files:
+        cols = st.columns(len(uploaded_files))
         images = []
-        cols = st.columns(len(uploaded_images))
-
-        # Display uploaded images as thumbnails in real-time
-        for i, img_file in enumerate(uploaded_images):
-            img = Image.open(img_file)
+        for i, path in enumerate(uploaded_files):
+            img = Image.open(path)
             images.append(img)
             with cols[i % len(cols)]:
-                st.image(img, caption=f"Image {i+1}", width=200)
+                st.image(img, caption=os.path.basename(path), width=200)
 
-        # Merge images into PDF
-        if st.button("Merge Images into PDF"):
+        # Merge button
+        if st.button("Merge Uploaded Images to PDF"):
             pdf_bytes = BytesIO()
             images[0].save(pdf_bytes, format="PDF", save_all=True, append_images=images[1:])
             pdf_bytes.seek(0)
-
             filename = f"images_merged_{int(time.time())}.pdf"
             save_bytes_to_folder(pdf_bytes.getvalue(), SAVED_DIR, filename)
             record_history(filename, "images_merge")
-
             st.success("✅ PDF created successfully!")
             st.download_button(
                 "⬇️ Download Merged PDF",
                 pdf_bytes,
                 file_name=filename
             )
-
-        # Optional: allow reordering images before merging
-        st.subheader("Reorder Images")
-        order = st.multiselect(
-            "Select order (1 = first image, etc.)",
-            options=list(range(1, len(images)+1)),
-            default=list(range(1, len(images)+1))
-        )
-
-        if order:
-            st.write("Images will be merged in this order:", order)
 
 
 # ---------------- ABOUT ----------------
