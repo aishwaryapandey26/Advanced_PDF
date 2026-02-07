@@ -18,7 +18,6 @@ import uuid
 import qrcode
 from io import BytesIO
 
-st.header("📸 Camera / Mobile Upload to PDF")
 
 
 
