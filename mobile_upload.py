@@ -14,17 +14,10 @@ st.write("📷 Tap below to take a photo or select from your gallery:")
 
 # HTML input that triggers camera/gallery on mobile
 st.markdown("""
-<form>
-  <input type="file" accept="image/*" capture="environment" multiple id="camera_input">
-</form>
-<script>
-document.getElementById('camera_input').addEventListener('change', function(){
-    const files = this.files;
-    if(files.length > 0){
-        alert(files.length + " image(s) selected. Scroll down to upload.");
-    }
-});
-</script>
+<h2 style="text-align:center; color:blue;">📸 Tap the button below to open your camera or gallery</h2>
+<center>
+<input type="file" accept="image/*" capture="environment" multiple style="font-size:20px; padding:10px;">
+</center>
 """, unsafe_allow_html=True)
 
 # Fallback: Streamlit uploader for compatibility
