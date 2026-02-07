@@ -1,42 +1,40 @@
 import streamlit as st
 import os
 from datetime import datetime
+from PIL import Image
 
+# Setup
 st.set_page_config(page_title="Mobile Upload", layout="centered")
 st.header("📱 Upload Images from Phone")
 
 UPLOAD_DIR = "mobile_uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-st.write("Take a photo or select from gallery:")
+st.write("📷 Tap below to take a photo or select from your gallery:")
 
+# HTML input that triggers camera/gallery on mobile
 st.markdown("""
-<input type="file" accept="image/*" capture="environment" multiple id="upload_input">
+<form>
+  <input type="file" accept="image/*" capture="environment" multiple id="camera_input">
+</form>
 <script>
-document.getElementById('upload_input').addEventListener('change', function() {
-    const file_list = this.files;
-    const reader = new FileReader();
-    for (let i = 0; i < file_list.length; i++) {
-        const file = file_list[i];
-        const fr = new FileReader();
-        fr.onload = function(e) {
-            fetch('/', {
-                method: 'POST',
-                body: e.target.result
-            });
-        };
-        fr.readAsArrayBuffer(file);
+document.getElementById('camera_input').addEventListener('change', function(){
+    const files = this.files;
+    if(files.length > 0){
+        alert(files.length + " image(s) selected. Scroll down to upload.");
     }
 });
 </script>
 """, unsafe_allow_html=True)
 
+# Fallback: Streamlit uploader for compatibility
 uploaded_files = st.file_uploader(
-    "Choose images",
+    "Or choose images manually",
     type=["jpg", "jpeg", "png"],
     accept_multiple_files=True
 )
 
+# Save uploaded images
 if uploaded_files:
     for file in uploaded_files:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -44,3 +42,12 @@ if uploaded_files:
         with open(file_path, "wb") as f:
             f.write(file.getbuffer())
     st.success(f"{len(uploaded_files)} image(s) uploaded successfully!")
+
+# Display uploaded images live
+uploaded_paths = [os.path.join(UPLOAD_DIR, f) for f in os.listdir(UPLOAD_DIR)]
+if uploaded_paths:
+    cols = st.columns(len(uploaded_paths))
+    for i, path in enumerate(uploaded_paths):
+        img = Image.open(path)
+        with cols[i % len(cols)]:
+            st.image(img, caption=os.path.basename(path), width=150)
