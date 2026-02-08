@@ -135,67 +135,56 @@ elif selected == "PDF Search":
 # ---------------- PDF TOOLS / ANNOTATIONS ----------------
 elif selected == "PDF Tools":
     st.header("🛠 PDF Annotation & Markup Tools")
-    file_tools = st.file_uploader("Upload PDF", type="pdf")
-    if file_tools:
-        doc = fitz.open(stream=file_tools.read(), filetype="pdf")
 
-        # ---- Add Highlights / Underline / Strike-through ----
-        st.subheader("Annotations")
-        query = st.text_input("Enter text to annotate")
-        highlight = st.checkbox("Highlight", value=True)
-        underline = st.checkbox("Underline")
-        strike = st.checkbox("Strike-through")
-        if query and st.button("Apply Annotation"):
-            for page in doc:
-                words = page.get_text("words")
-                rects = [fitz.Rect(w[:4]) for w in words if query.lower() in w[4].lower()]
-                for r in rects:
-                    if highlight: page.add_highlight_annot(r)
-                    if underline: page.add_underline_annot(r)
-                    if strike: page.add_strikeout_annot(r)
-            output = BytesIO()
-            doc.save(output)
-            output.seek(0)
-            st.download_button("Download Annotated PDF", output, file_name="annotated.pdf")
+    pdf_file = st.file_uploader("Upload PDF", type="pdf")
+    if pdf_file:
+        import base64
 
-        # ---- Sticky Notes / Comments ----
-        st.subheader("Add Sticky Notes")
-        page_num = st.number_input("Page Number", 1, len(doc), 1)
-        note_text = st.text_area("Note Text")
-        if note_text and st.button("Add Note"):
-            page = doc[page_num-1]
-            page.add_text_annot(fitz.Point(50,50), note_text)
-            output = BytesIO()
-            doc.save(output)
-            output.seek(0)
-            st.download_button("Download PDF with Notes", output, file_name="notes.pdf")
+        pdf_bytes = pdf_file.read()
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
 
-        # ---- Visual Page Reorder / Delete ----
-        st.subheader("Visual Page Reorder / Delete")
-        images = []
-        for i, page in enumerate(doc):
-            pix = page.get_pixmap(matrix=fitz.Matrix(0.35,0.35))
-            img_bytes = pix.tobytes("png")
-            b64 = base64.b64encode(img_bytes).decode()
-            images.append((i,b64))
-        html = "<div class='grid' id='pages'>"
-        for idx, b64 in images:
-            html += f"""<div class='page' data-id='{idx}'>
-                <img src='data:image/png;base64,{b64}'><small>Page {idx+1}</small>
-            </div>"""
-        html += "</div><script src='https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js'></script>"
-        html += "<script>Sortable.create(document.getElementById('pages'), {animation:150});</script>"
-        components.html(html, height=500)
-        if "page_order" not in st.session_state:
-            st.session_state.page_order = list(range(len(doc)))
-        if st.button("Apply Page Order"):
-            writer = PdfWriter()
-            for i in st.session_state.page_order:
-                writer.add_page(PdfReader(file_tools).pages[i])
-            output = BytesIO()
-            writer.write(output)
-            output.seek(0)
-            st.download_button("⬇️ Download Reordered PDF", output, file_name="reordered_pages.pdf")
+        st.write("Use the tools to annotate your PDF. When done, click **Download** to save your changes.")
+
+        html_code = f"""
+        <div id="viewer" style="width:100%;height:90vh;"></div>
+
+        <!-- PDFTron WebViewer CDN -->
+        <script src="https://www.pdftron.com/webviewer/lib/webviewer.min.js"></script>
+
+        <script>
+            WebViewer({{
+                path: 'https://www.pdftron.com/webviewer/lib',
+                initialDoc: 'data:application/pdf;base64,{pdf_base64}',
+                enableAnnotations: true,
+                fullAPI: true
+            }}, document.getElementById('viewer')).then(instance => {{
+                const { Annotations, documentViewer } = instance;
+
+                // Example: Add custom save button inside viewer
+                const saveButton = document.createElement('button');
+                saveButton.innerText = "Download Annotated PDF";
+                saveButton.style.position = "absolute";
+                saveButton.style.top = "10px";
+                saveButton.style.right = "10px";
+                saveButton.style.zIndex = 1000;
+                saveButton.onclick = async () => {{
+                    const xfdfString = await instance.annotationManager.exportAnnotations();
+                    const doc = await instance.Core.PDFNet.PDFDoc.createFromURL('data:application/pdf;base64,{pdf_base64}');
+                    await instance.Core.PDFNet.AnnotManager.importAnnotations(xfdfString, doc);
+                    const data = await doc.saveMemoryBuffer(instance.Core.PDFNet.SDFDocSaveOptions.e_linearized);
+                    const blob = new Blob([data], {{ type: 'application/pdf' }});
+                    const link = document.createElement('a');
+                    link.href = URL.createObjectURL(blob);
+                    link.download = 'annotated.pdf';
+                    link.click();
+                }};
+                document.body.appendChild(saveButton);
+            }});
+        </script>
+        """
+
+        import streamlit.components.v1 as components
+        components.html(html_code, height=800)
 
 # ---------------- PDF CONVERSIONS ----------------
 elif selected == "PDF Conversion":
