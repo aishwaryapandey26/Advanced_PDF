@@ -140,8 +140,10 @@ elif selected == "PDF Tools":
     if pdf_file:
         import base64
 
-        pdf_bytes = pdf_file.read()
-        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        # Save temporarily
+        temp_filename = os.path.join(SAVED_DIR, f"temp_{uuid.uuid4().hex}.pdf")
+        with open(temp_filename, "wb") as f:
+            f.write(pdf_file.read())
 
         st.write("Use the tools to annotate your PDF. When done, click **Download** to save your changes.")
 
@@ -153,23 +155,23 @@ elif selected == "PDF Tools":
         <script>
             WebViewer({{
                 path: 'https://www.pdftron.com/webviewer/lib',
-                initialDoc: 'data:application/pdf;base64,{pdf_base64}',
+                initialDoc: '{temp_filename}',
                 enableAnnotations: true,
                 fullAPI: true
             }}, document.getElementById('viewer')).then(instance => {{
                 const Annotations = instance.Annotations;
                 const documentViewer = instance.documentViewer;
 
-                // Add custom save button
                 const saveButton = document.createElement('button');
                 saveButton.innerText = "Download Annotated PDF";
                 saveButton.style.position = "absolute";
                 saveButton.style.top = "10px";
                 saveButton.style.right = "10px";
                 saveButton.style.zIndex = 1000;
+
                 saveButton.onclick = async () => {{
                     const xfdfString = await instance.annotationManager.exportAnnotations();
-                    const doc = await instance.Core.PDFNet.PDFDoc.createFromURL('data:application/pdf;base64,{pdf_base64}');
+                    const doc = await instance.Core.PDFNet.PDFDoc.createFromURL('{temp_filename}');
                     await instance.Core.PDFNet.AnnotManager.importAnnotations(xfdfString, doc);
                     const data = await doc.saveMemoryBuffer(instance.Core.PDFNet.SDFDocSaveOptions.e_linearized);
                     const blob = new Blob([data], {{ type: 'application/pdf' }});
