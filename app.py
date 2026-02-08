@@ -148,7 +148,6 @@ elif selected == "PDF Tools":
         html_code = f"""
         <div id="viewer" style="width:100%;height:90vh;"></div>
 
-        <!-- PDFTron WebViewer CDN -->
         <script src="https://www.pdftron.com/webviewer/lib/webviewer.min.js"></script>
 
         <script>
@@ -158,9 +157,10 @@ elif selected == "PDF Tools":
                 enableAnnotations: true,
                 fullAPI: true
             }}, document.getElementById('viewer')).then(instance => {{
-                const { Annotations, documentViewer } = instance;
+                const Annotations = instance.Annotations;
+                const documentViewer = instance.documentViewer;
 
-                // Example: Add custom save button inside viewer
+                // Add custom save button
                 const saveButton = document.createElement('button');
                 saveButton.innerText = "Download Annotated PDF";
                 saveButton.style.position = "absolute";
